@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="challenge_overlay_name">Cloudflare Abfrage-Manager</string>
+    <string name="permission_display_over_apps_message">Um den %1$s zu verwenden, bitte in den folgenden Android-Einstellungen %2$s auswählen und %3$s aktivieren.</string>
+    <string name="challenge_notification_title">Challenge-WebView aktiv</string>
+    <string name="challenge_notification_text">Hintergrund-Challenge-Dienst läuft. Er beendet sich nach einer gewissen Leerlaufzeit automatisch.</string>
+    <string name="close">close</string>
+    <string name="permission_display_over_apps">Berechtigung zur Anzeige über andere Apps erteilen</string>
+    <string name="permission_display_over_apps_permission_name">„Über anderen Apps einblenden“</string>
+</resources>
+

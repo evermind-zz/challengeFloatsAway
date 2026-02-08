@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="challenge_overlay_name">Cloudflare Verzoekmanager</string>
+    <string name="permission_display_over_apps_message">Om de %1$s te gebruiken, selecteert u %2$s in het volgende Android-instellingenmenu en schakelt u %3$s in.</string>
+    <string name="challenge_notification_title">Challenge-WebView actief</string>
+    <string name="challenge_notification_text">Achtergrond-challenge-service actief. Deze wordt automatisch beëindigd na enige inactieve tijd.</string>
+    <string name="close">Sluiten</string>
+    <string name="permission_display_over_apps">Geef toestemming voor weergave over andere apps</string>
+    <string name="permission_display_over_apps_permission_name">‘Weergeven vóór andere apps toestaan’</string>
+</resources>
+

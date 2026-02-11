@@ -120,7 +120,7 @@ class ChallengeValidateJavaScriptValue {
      *
      * It only counts {,[,] and } so basically no real validation
      */
-    private fun isJsonComplete(json: String): Boolean {
+    fun isJsonComplete(json: String): Boolean {
         if (json.isEmpty()) return false
 
         var braceCount = 0

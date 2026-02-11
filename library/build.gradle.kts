@@ -70,4 +70,7 @@ dependencies {
 
     runtimeOnly("androidx.lifecycle:lifecycle-process:2.6.2")
     runtimeOnly("androidx.transition:transition:1.2.0")
+
+    /** Testing **/
+    testImplementation(libs.junit)
 }

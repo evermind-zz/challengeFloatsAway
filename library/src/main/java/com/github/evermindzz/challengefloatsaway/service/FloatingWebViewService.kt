@@ -213,7 +213,8 @@ class FloatingWebViewService :
 
         mainFloatingButtonContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, 100)
+            val toolbarLikeHeight = dpToPx(TOOLBAR_LIKE_HEIGHT_DP, context)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, toolbarLikeHeight)
 
             gravity = Gravity.END
             setBackgroundColor(Color.TRANSPARENT)
@@ -221,15 +222,16 @@ class FloatingWebViewService :
             isFocusable = true
         }
 
+        val buttonSize = dpToPx(TOOLBAR_LIKE_HEIGHT_DP - 3, context)
         val closeButton = Button(context).apply {
             text = "x"
-            layoutParams = LinearLayout.LayoutParams(120, MATCH_PARENT)
+            layoutParams = LinearLayout.LayoutParams(buttonSize, buttonSize)
             setOnClickListener { closeOverlay() }
         }
 
         val minimizeButton = Button(context).apply {
             text = "–"
-            layoutParams = LinearLayout.LayoutParams(120, MATCH_PARENT)
+            layoutParams = LinearLayout.LayoutParams(buttonSize, buttonSize)
             setOnClickListener { minimize() }
         }
 
@@ -429,8 +431,7 @@ class FloatingWebViewService :
         // zone NOT added yet — added only while dragging
     }
 
-    // TOOO replace with something else
-    fun dpToPx(
+    private fun dpToPx(
         @Dimension(unit = Dimension.DP) dp: Int,
         context: Context
     ): Int {
@@ -522,6 +523,7 @@ class FloatingWebViewService :
 
     companion object {
         private const val NOTIFICATION_ID = 1001
+        private const val TOOLBAR_LIKE_HEIGHT_DP = 48
     }
 
     // /section handle the eventbus

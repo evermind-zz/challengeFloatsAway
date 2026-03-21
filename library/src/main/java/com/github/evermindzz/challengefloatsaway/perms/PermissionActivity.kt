@@ -9,7 +9,7 @@ import androidx.annotation.RequiresApi
 import com.github.evermindzz.challengefloatsaway.R
 import org.greenrobot.eventbus.EventBus
 
-class OverlayPermissionActivity : ComponentActivity() {
+class PermissionActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.M)
     private val overlaySettingsLauncher = registerForActivityResult(

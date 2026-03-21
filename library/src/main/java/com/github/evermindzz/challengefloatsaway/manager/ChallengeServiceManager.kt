@@ -12,7 +12,7 @@ import com.github.evermindzz.challengefloatsaway.ChallengeEvents.EventCloudflare
 import com.github.evermindzz.challengefloatsaway.ChallengeEvents.EventServiceActions
 import com.github.evermindzz.challengefloatsaway.ChallengeResult
 import com.github.evermindzz.challengefloatsaway.ChallengeSettings
-import com.github.evermindzz.challengefloatsaway.perms.OverlayPermissionActivity
+import com.github.evermindzz.challengefloatsaway.perms.PermissionActivity
 import com.github.evermindzz.challengefloatsaway.perms.PermsHelper
 import com.github.evermindzz.challengefloatsaway.perms.PermsHelper.OverlayPermissionResult
 import com.github.evermindzz.challengefloatsaway.service.FloatingWebViewService

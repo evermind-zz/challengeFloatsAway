@@ -2,19 +2,18 @@ package com.github.evermindzz.challengefloatsaway.perms
 
 import android.Manifest
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import android.text.Html
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.text.HtmlCompat
+import com.github.evermindzz.challengefloatsaway.ChallengeSettings
 import com.github.evermindzz.challengefloatsaway.R
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -73,29 +72,26 @@ object PermsHelper {
                     appNameItalic,
                     permissionNameItalic
                 )
-            AlertDialog.Builder(context)
-                .setTitle(title)
-                .setMessage(Html.fromHtml(message, Html.FROM_HTML_MODE_COMPACT))
-                .setPositiveButton(
-                    "OK",
-                    DialogInterface.OnClickListener { dialog: DialogInterface?, which: Int ->
-                        // we don’t need the package name here, since it won’t do anything on >R
-                        val intent =
-                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                        try {
-                            intentLauncher(intent)
-                        } catch (ignored: ActivityNotFoundException) {
-                        }
-                        continuation.resume(PermissionRequestResult.CheckForActivityResult)
+
+            ChallengeSettings.config.value.dialogProvider.showConfirmDialog(
+                context = context,
+                title = title,
+                message = HtmlCompat.fromHtml(message, HtmlCompat.FROM_HTML_MODE_COMPACT),
+                positive = context.getString(R.string.ok),
+                negative = context.getString(R.string.cancel),
+                onPositive = {
+                    val intent =
+                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                    try {
+                        intentLauncher(intent)
+                    } catch (ignored: ActivityNotFoundException) {
                     }
-                )
-                .setNegativeButton(
-                    "Cancel"
-                ) { p0, p1 ->
+                    continuation.resume(PermissionRequestResult.CheckForActivityResult)
+                },
+                onNegative = {
                     continuation.resume(PermissionRequestResult.Denied)
                 }
-                .setCancelable(true)
-                .show()
+            )
         }
     }
 
@@ -114,19 +110,20 @@ object PermsHelper {
         }
 
         if (activity.shouldShowRequestPermissionRationale(permission)) {
-            AlertDialog.Builder(activity)
-                .setTitle(activity.getString(R.string.phone_permission_title))
-                .setMessage(activity.getString(R.string.phone_permission_message))
-                .setPositiveButton(activity.getString(R.string.ok)) { _, _ ->
+            ChallengeSettings.config.value.dialogProvider.showConfirmDialog(
+                context = activity,
+                title = activity.getString(R.string.phone_permission_title),
+                message = activity.getString(R.string.phone_permission_message),
+                positive = activity.getString(R.string.ok),
+                negative = activity.getString(R.string.cancel),
+                onPositive = {
                     intentLauncher.launch(permission)
                     continuation.resume(PermissionRequestResult.CheckForActivityResult)
-                }
-                .setNegativeButton(
-                    activity.getString(R.string.cancel)
-                ) { p0, p1 ->
+                },
+                onNegative = {
                     continuation.resume(PermissionRequestResult.Denied)
                 }
-                .show()
+            )
         } else {
             intentLauncher.launch(permission)
             continuation.resume(PermissionRequestResult.CheckForActivityResult)

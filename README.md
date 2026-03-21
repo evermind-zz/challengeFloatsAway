@@ -13,7 +13,6 @@ This library is not widly tested yet
 - get html data from WebView to be further processed
 - get cookies
 - overlay/floating permission handling
-- 
 
 
 #### Repository
@@ -38,8 +37,11 @@ dependencies {
 
 #### Usage
 ##### Configuration
-We have to set up the library first. Eg set some domains we want to have the
-cookies or what user agent WebView should use. Run interactive or not
+We have to set up the library first.
+- set some domains we want to have the cookies
+- what user agent WebView should use.
+- Run interactive or not
+- provide custom dialog provider
 
 create a method and call it somewhere if you want to override the default
 ```kotlin
@@ -52,10 +54,43 @@ create a method and call it somewhere if you want to override the default
                     "example.com",
                     ".example.com"
                 ),
-                isInteractive = isInteractive
+                isInteractive = isInteractive,
+                // Optional: The library is using android.app.AlertDialog
+                // to display dialogs to ask for android permissions.
+                // If you want your own dialog style eg.:
+                // androidx.appcompat.app.AlertDialog,
+                // MaterialAlertDialogBuilder or something else provide
+                // your implementation of SimpleDialogProvider.
+                dialogProvider = CustomDialogProvider()
             )
         }
     }
+
+    class CustomDialogProvider : SimpleDialogProvider {
+        override fun showConfirmDialog(
+            context: Context,
+            title: String?,
+            message: CharSequence,
+            positive: String,
+            negative: String?,
+            onPositive: () -> Unit,
+            onNegative: () -> Unit
+        ) {
+            val themeWrapperContext = ContextThemeWrapper(context, R.style.CustomTheme)
+            androidx.appcompat.app.AlertDialog.Builder(themeWrapperContext)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton(positive) { _, _ -> onPositive() }
+                .apply {
+                    if (negative != null) {
+                        setNegativeButton(negative) { _, _ -> onNegative() }
+                    } else {
+                        setNegativeButton(null as String?, null)
+                    }
+                }
+                .setOnCancelListener { onNegative() }
+                .show()
+        }
 ```
 
 ##### Interceptor

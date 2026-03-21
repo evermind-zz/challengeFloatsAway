@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="challenge_overlay_name">Cloudflare challenge handler</string>
-    <string name="permission_display_over_apps_message">In order to use the %1$s, please select %2$s in the following Android settings menu and enable %3$s.</string>
+    <string name="permission_display_over_apps_message" formatted="true">In order to use the %1$s, please select %2$s in the following Android settings menu and enable %3$s.</string>
     <string name="challenge_notification_title">Challenge WebView Active</string>
     <string name="challenge_notification_text">Background challenge service running. Will terminate itself after some idle time</string>
     <string name="close">close</string>
     <string name="permission_display_over_apps">Give permission to display over other apps</string>
     <string name="permission_display_over_apps_permission_name">“Allow display over other apps”</string>
+    <string name="phone_permission_title">Phone permission required</string>
+    <string name="phone_permission_message">Required to pause the Cloudflare floating overlay during calls.</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
 </resources>

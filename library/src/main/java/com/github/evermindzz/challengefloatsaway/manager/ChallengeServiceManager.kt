@@ -1,11 +1,14 @@
 package com.github.evermindzz.challengefloatsaway.manager
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import com.github.evermindzz.challengefloatsaway.ChallengeEvents.EventCloudflareChallengeRequest
 import com.github.evermindzz.challengefloatsaway.ChallengeEvents.EventCloudflareChallengeResponse
 import com.github.evermindzz.challengefloatsaway.ChallengeEvents.EventCloudflareServiceReady
@@ -13,8 +16,9 @@ import com.github.evermindzz.challengefloatsaway.ChallengeEvents.EventServiceAct
 import com.github.evermindzz.challengefloatsaway.ChallengeResult
 import com.github.evermindzz.challengefloatsaway.ChallengeSettings
 import com.github.evermindzz.challengefloatsaway.perms.PermissionActivity
+import com.github.evermindzz.challengefloatsaway.perms.PermissionActivity.Companion.EXTRA_ANDROID_PERMISSION
 import com.github.evermindzz.challengefloatsaway.perms.PermsHelper
-import com.github.evermindzz.challengefloatsaway.perms.PermsHelper.OverlayPermissionResult
+import com.github.evermindzz.challengefloatsaway.perms.PermsHelper.PermissionRequestResult
 import com.github.evermindzz.challengefloatsaway.service.FloatingWebViewService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +43,7 @@ class ChallengeServiceManager(
     ChallengeManagerInterface,
     EventCloudflareChallengeResponse.Handler,
     EventCloudflareServiceReady.Handler,
-    PermsHelper.EventOverlayPermissionResult.Handler {
+    PermsHelper.EventPermissionResult.Handler {
 
     var isInteractive: Boolean = false
     private var serviceIntent: Intent
@@ -51,9 +55,9 @@ class ChallengeServiceManager(
     private var eventCloudflareChallengeResponseLatch: CountDownLatch? = null
 
     @Volatile
-    private var eventOverlayPermissionLatch: CountDownLatch? = null
+    private var eventPermissionLatch: CountDownLatch? = null
     private var eventResult: EventCloudflareChallengeResponse? = null
-    private var overlayPermissionResult: OverlayPermissionResult? = OverlayPermissionResult.Denied
+    private var permissionRequestResult: PermissionRequestResult? = PermissionRequestResult.Denied
 
     @Volatile
     private var currentCookies = ""
@@ -95,15 +99,17 @@ class ChallengeServiceManager(
 
     @Subscribe(threadMode = ThreadMode.BACKGROUND)
     override fun handleEventOverlayPermissionResult(
-        event: OverlayPermissionResult
+        event: PermsHelper.EventPermissionResult
     ) {
-        if (eventOverlayPermissionLatch != null) {
-            eventOverlayPermissionLatch!!.countDown()
-            overlayPermissionResult = event
-        } else {
-            throw RuntimeException(
-                "eventOverlayPermissionLatch == null -> that should never happen"
-            )
+        if (event.whichPermission == Manifest.permission.READ_PHONE_STATE) {
+            if (eventPermissionLatch != null) {
+                eventPermissionLatch!!.countDown()
+                permissionRequestResult = event.permResult
+            } else {
+                throw RuntimeException(
+                    "eventOverlayPermissionLatch == null -> that should never happen"
+                )
+            }
         }
     }
 
@@ -115,42 +121,56 @@ class ChallengeServiceManager(
     }
 
     private fun checkPermsForStartingCloudflareChallengeService(): Boolean {
-        var returnValue = false
-
-        if (canDrawOverlays(applicationContext)) {
-            returnValue = true
+        var returnValue = if (canDrawOverlays(applicationContext)) {
+            true
         } else {
-            val permIntent = Intent(applicationContext, OverlayPermissionActivity::class.java)
-            permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            applicationContext.startActivity(permIntent)
-            eventOverlayPermissionLatch = CountDownLatch(1)
-            try {
-                eventOverlayPermissionLatch!!.await()
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                Log.d(TAG, "checkPermsForStartingCloudflareChallengeService()", e)
-            }
-
-            when (overlayPermissionResult) {
-                OverlayPermissionResult.Granted -> {
-                    returnValue = true
-                }
-
-                OverlayPermissionResult.Denied -> {
-                    Toast.makeText(
-                        applicationContext,
-                        "You did not grant overlay permission to the app, we cannot continue" +
-                                " to start the needed window for the cloudflare challenge",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-
-                else -> {
-                    throw RuntimeException("unhandled case")
-                }
-            }
+            launchPermissionAskingActivity(Manifest.permission.SYSTEM_ALERT_WINDOW)
         }
 
+        if (returnValue && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val phoneStatePermission = Manifest.permission.READ_PHONE_STATE
+            if (ContextCompat.checkSelfPermission(applicationContext, phoneStatePermission)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                returnValue = launchPermissionAskingActivity(phoneStatePermission)
+            }
+        }
+        return returnValue
+    }
+
+    private fun launchPermissionAskingActivity(permission: String): Boolean {
+        var returnValue = false
+        val permIntent = Intent(applicationContext, PermissionActivity::class.java)
+        permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        permIntent.putExtra(EXTRA_ANDROID_PERMISSION, permission)
+        applicationContext.startActivity(permIntent)
+        eventPermissionLatch = CountDownLatch(1)
+        try {
+            eventPermissionLatch!!.await()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            Log.d(TAG, "launchPermissionAskingActivity()", e)
+        }
+
+        when (permissionRequestResult) {
+            PermissionRequestResult.Granted -> {
+                returnValue = true
+            }
+
+            PermissionRequestResult.Denied -> {
+                Log.e(TAG, "launchPermissionAskingActivity() Denied: $permission")
+                Toast.makeText(
+                    applicationContext,
+                    "You did not grant overlay permission to the app, we cannot continue" +
+                            " to start the needed window for the cloudflare challenge",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            else -> {
+                throw RuntimeException("unhandled case")
+            }
+        }
         return returnValue
     }
 

@@ -45,6 +45,10 @@ class ChallengeServiceManager(
     EventCloudflareServiceReady.Handler,
     PermsHelper.EventPermissionResult.Handler {
 
+    private val permissionMaxRetryTimeoutInMs: Long = 5 * 60 * 1000
+    private var permissionAskRetryTimestamp: Long = 0
+    private var permissionAskRetryCount: Int = 0
+    private val permissionAskRetryCountMax: Int = 5
     var isInteractive: Boolean = false
     private var serviceIntent: Intent
 
@@ -139,12 +143,17 @@ class ChallengeServiceManager(
     }
 
     private fun launchPermissionAskingActivity(permission: String): Boolean {
+        if (isPermissionAskRetryCountReached()) {
+            return false;
+        }
+
         var returnValue = false
         val permIntent = Intent(applicationContext, PermissionActivity::class.java)
         permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         permIntent.putExtra(EXTRA_ANDROID_PERMISSION, permission)
         applicationContext.startActivity(permIntent)
         eventPermissionLatch = CountDownLatch(1)
+        increasePermissionAskRetryCount()
         try {
             eventPermissionLatch!!.await()
         } catch (e: InterruptedException) {
@@ -172,6 +181,26 @@ class ChallengeServiceManager(
             }
         }
         return returnValue
+    }
+
+    private fun isPermissionAskRetryCountReached(): Boolean {
+        val now = System.currentTimeMillis()
+        val diff = now - permissionAskRetryTimestamp
+
+        if (diff > permissionMaxRetryTimeoutInMs) {
+            permissionAskRetryCount = 0
+            permissionAskRetryTimestamp = 0
+            return false
+        }
+
+        return permissionAskRetryCount >= permissionAskRetryCountMax
+    }
+
+    private fun increasePermissionAskRetryCount() {
+        if (permissionAskRetryCount == 0) {
+            permissionAskRetryTimestamp = System.currentTimeMillis()
+        }
+        permissionAskRetryCount++
     }
 
     private fun startCloudflareChallengeService() {

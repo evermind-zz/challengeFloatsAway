@@ -65,7 +65,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.6.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
-    implementation("com.github.evermind-zz:Cloudflare-Bypass:c4264c53e3")
+    implementation("com.github.evermind-zz:Cloudflare-Bypass:17b591c0dd")
     implementation("org.greenrobot:eventbus:3.3.1")
 
     runtimeOnly("androidx.lifecycle:lifecycle-process:2.6.2")

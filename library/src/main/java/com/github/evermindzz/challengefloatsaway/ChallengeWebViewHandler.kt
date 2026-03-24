@@ -30,6 +30,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.greenrobot.eventbus.EventBus
+import org.json.JSONObject
 import java.util.Locale
 import kotlin.concurrent.Volatile
 
@@ -45,8 +46,13 @@ class ChallengeWebViewHandler(
     private lateinit var userAgent: String
     private lateinit var cookieDomains: Array<String>
 
+    private var reloadAttempts = 0
+
     companion object {
         val TAG: String = ChallengeWebViewHandler::class.java.simpleName
+        private const val COOKIES_PREF_FILE = "cf_cookies"
+        private const val COOKIES_PREF_KEY = "webViewCookies"
+        private const val MAX_RELOAD_ATTEMPTS = 3
     }
 
     @Volatile
@@ -69,7 +75,11 @@ class ChallengeWebViewHandler(
 
     /** determine which caller calls [evaluateViaJavaScript] */
     enum class EvalSource { PROGRESS_CHANGED, PAGE_FINISHED }
-    data class EvalType(val url: String?, val source: EvalSource)
+    data class EvalType(
+        val url: String?,
+        val source: EvalSource,
+        val hasRealContent: Boolean? = null
+    )
 
     private val evaluationChannel = Channel<EvalType>(Channel.CONFLATED)
 
@@ -91,7 +101,7 @@ class ChallengeWebViewHandler(
         serviceScope.launch(Dispatchers.Main) {
             for (source in evaluationChannel) {
                 Log.d(TAG, "serviceScope: Evaluating JS triggered by: ${source.source}")
-                evaluateViaJavaScript(source.url, source.source, currentFetchParameters)
+                evaluateViaJavaScript(source.url, source, currentFetchParameters)
             }
         }
 
@@ -148,13 +158,41 @@ class ChallengeWebViewHandler(
         webView.webViewClient = object : BypassClient() {
             override fun onPageFinishedByPassed(
                 view: WebView?,
-                url: String?
+                url: String?,
+                isCloudflareChallenge: Boolean
             ) {
-                Log.d(
-                    TAG,
-                    "onPageFinishedByPassed(): loadedUrl=$url requestedUrl=${currentFetchParameters.requestedUrl}"
-                )
-                evaluationChannel.trySend(EvalType(url, EvalSource.PAGE_FINISHED))
+                super.onPageFinishedByPassed(view, url, isCloudflareChallenge)
+
+                if (!isCloudflareChallenge) {
+                    Log.d(
+                        TAG,
+                        "onPageFinishedByPassed(): loadedUrl=$url requestedUrl=${currentFetchParameters.requestedUrl}"
+                    )
+                    reloadAttempts = 0
+                    view?.let {
+                        saveAllCookies(view.context, cookieDomains)
+                    }
+                    evaluationChannel.trySend(EvalType(url, EvalSource.PAGE_FINISHED, true))
+                } else if (reloadAttempts < MAX_RELOAD_ATTEMPTS) {
+                    reloadAttempts++
+
+                    val randomDelay = (800..1100).random()
+
+                    view?.postDelayed({
+                        Log.d(
+                            TAG,
+                            "onPageFinishedByPassed(): Reload after Challenge (retry $reloadAttempts) with delay $randomDelay ms"
+                        )
+                        view.loadUrl(currentFetchParameters.requestedUrl)
+                    }, randomDelay.toLong())
+                } else {
+                    reloadAttempts = 0
+                    Log.e(
+                        TAG,
+                        "Cloudflare Bypass did not work after $MAX_RELOAD_ATTEMPTS retries"
+                    )
+                    evaluationChannel.trySend(EvalType(url, EvalSource.PAGE_FINISHED, false))
+                }
             }
 
             /**
@@ -264,6 +302,7 @@ class ChallengeWebViewHandler(
         withContext(Dispatchers.Main) {
             startLoadingUrlTime = 0L // reset for onProgressChanged()
             webView.stopLoading()
+            restoreAllCookies(webView.context)
             webView.loadUrl(url)
         }
 
@@ -325,7 +364,7 @@ class ChallengeWebViewHandler(
      */
     private suspend fun evaluateViaJavaScript(
         loadedUrl: String?,
-        evalSource: EvalSource,
+        evalType: EvalType,
         currentFetchParameters: FetchParameters
     ) {
         val deferred = currentResult ?: return
@@ -334,8 +373,18 @@ class ChallengeWebViewHandler(
             return
         }
 
+        val evalSource = evalType.source
         val requestId = currentFetchParameters.requestId
         val requestedUrl = currentFetchParameters.requestedUrl
+
+        evalType.hasRealContent?.let { hasRealContent ->
+            if (!hasRealContent && evalSource == EvalSource.PAGE_FINISHED) {
+                // if onPageFinished was the caller, but we still have no real page with content
+                deferred.complete(ChallengeResult(false, null, null))
+                return
+            }
+        }
+
         Log.d(
             TAG,
             "evaluateViaJavaScript(): run JS evaluation: requestId=$requestId loadedUrl=$loadedUrl requestedUrl=$requestedUrl"
@@ -363,7 +412,7 @@ class ChallengeWebViewHandler(
             webView.stopLoading()
             deferred.complete(result)
         } else if (evalSource == EvalSource.PAGE_FINISHED) {
-            // if onPageFinished was the caller but we still had no success
+            // if onPageFinished was the caller, but we still had no success
             deferred.complete(result)
         }
     }
@@ -459,5 +508,74 @@ class ChallengeWebViewHandler(
         requestChannel.close()
         evaluationChannel.close()
         stopFetching()
+    }
+
+    fun saveAllCookies(context: Context, domains: Array<String>) {
+        val cookieManager = CookieManager.getInstance()
+        val cookieMap = JSONObject()
+
+        try {
+            for (domain in domains) {
+                val cookies = cookieManager.getCookie(domain)
+                if (!cookies.isNullOrEmpty()) {
+                    cookieMap.put(domain, cookies)
+                    Log.d(TAG, "Collected cookies for $domain cookies: $cookies")
+                }
+            }
+
+            if (cookieMap.length() == 0) {
+                Log.w(TAG, "No cookies found to save")
+                return
+            }
+
+            val jsonString = cookieMap.toString()
+
+            val prefs = context.getSharedPreferences(COOKIES_PREF_FILE, Context.MODE_PRIVATE)
+            prefs.edit().putString(COOKIES_PREF_KEY, jsonString).apply()
+
+            flushCookieManager(cookieManager)
+
+            Log.d(
+                TAG,
+                "All cookies saved successfully. Domains: ${cookieMap.keys().asSequence().toList()}"
+            )
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save cookies", e)
+        }
+    }
+
+    fun restoreAllCookies(context: Context) {
+        val prefs = context.getSharedPreferences(COOKIES_PREF_FILE, Context.MODE_PRIVATE)
+        val jsonString = prefs.getString(COOKIES_PREF_KEY, null) ?: return
+
+        try {
+            val cookieMap = JSONObject(jsonString)
+            val cookieManager = CookieManager.getInstance()
+            cookieManager.setAcceptCookie(true)
+
+            val keys = cookieMap.keys()
+            while (keys.hasNext()) {
+                val domain = keys.next() as String
+                val cookiesString = cookieMap.getString(domain)
+
+                if (cookiesString.isNotEmpty()) {
+                    cookiesString.split(";").forEach { cookie ->
+                        val trimmed = cookie.trim()
+                        if (trimmed.isNotEmpty()) {
+                            cookieManager.setCookie(domain, trimmed)
+                            Log.d(TAG, "Restored cookies for domain: $domain Cookie: $trimmed")
+                        }
+                    }
+                    Log.d(TAG, "Restored cookies for domain: $domain")
+                }
+            }
+
+            flushCookieManager(cookieManager)
+            Log.d(TAG, "All cookies restored from storage")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restore cookies", e)
+        }
     }
 }
